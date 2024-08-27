@@ -1,0 +1,8 @@
+spring:
+    datasource:
+        hikari:
+            minimum-idle: 1
+            maximum-pool-size: 2
+    kafka:
+        partitions-quantity: 1
+        replication-factor: 1

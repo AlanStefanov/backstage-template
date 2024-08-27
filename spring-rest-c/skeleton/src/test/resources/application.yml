@@ -1,0 +1,12 @@
+main:
+  path: /${{values.component_name}}
+
+spring:
+  application:
+    name: ${{values.component_name}}
+  main:
+    banner-mode: 'off'
+  profiles:
+    active: test
+  jackson:
+    property-naming-strategy: SNAKE_CASE

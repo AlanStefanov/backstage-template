@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${{values.namespace}}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${{values.component_name}}-_JOB_ID_
+  namespace: ${{values.namespace}}
+spec:
+  ttlSecondsAfterFinished: 100
+  template:
+    metadata:
+      namespace: ${{values.namespace}}
+    spec:
+      containers:
+        - name: ${{values.component_name}}
+          image: _IMAGE_
+          env:
+            - name: COMMIT_SHA
+              value: _COMMIT_SHA_
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: databasecredentials
+                  key: db_nme_${{values.database_name}}
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: databasecredentials
+                  key: db_usr_${{values.database_name}}
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: databasecredentials
+                  key: db_pwd_${{values.database_name}}
+            - name: DATABASE_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: database-username-host
+                  key: database-dns-capa-${{values.k8s_cluster}}-flexible
+            - name: DATABASE_URL
+              value: postgres://$(DATABASE_HOST):5432/$(DB_NAME)?sslmode=require&user=$(DB_USER)&password=$(DB_PASS)
+          imagePullPolicy: Always
+      imagePullSecrets:
+        - name: ${{values.component_name}}-registry
+      restartPolicy: Never
+  backoffLimit: 3

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <!-- @formatter:off -->
+    <property name="LOGS" value="./logs"/>
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="com.newrelic.logging.logback.NewRelicEncoder"/>
+    </appender>
+
+    <appender name="ASYNC" class="com.newrelic.logging.logback.NewRelicAsyncAppender">
+        <appender-ref ref="STDOUT"/>
+    </appender>
+
+    <springProfile name="prod">
+        <logger name="cl.tenpo" level="INFO"/>
+
+        <root level="WARN">
+            <appender-ref ref="ASYNC"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="uat,dev">
+        <logger name="cl.tenpo" level="DEBUG"/>
+        <logger name="org.apache" level="ERROR"/>
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="com.zaxxer" level="WARN"/>
+        <logger name="org.hibernate" level="WARN"/>
+
+        <root level="INFO">
+            <appender-ref ref="ASYNC"/>
+        </root>
+
+    </springProfile>
+
+    <springProfile name="local,test">
+        <appender name="Console" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>
+                    %d{yyyy-MM-dd HH:mm:ss} %highlight(%-5level) [%blue(%t),%X{traceId:-},%X{spanId:-}] %yellow(%C{1}): %msg%n%throwable
+                </pattern>
+            </encoder>
+        </appender>
+
+        <logger name="cl.tenpo" level="DEBUG"/>
+        <logger name="org.apache" level="ERROR"/>
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="com.zaxxer" level="WARN"/>
+        <logger name="org.hibernate" level="WARN"/>
+
+        <root level="INFO">
+            <appender-ref ref="Console"/>
+        </root>
+    </springProfile>
+
+</configuration>

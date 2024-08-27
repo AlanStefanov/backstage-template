@@ -1,0 +1,163 @@
+stages:
+  - build
+  - visualize
+  - coverageVerifier
+  - docker
+  - deploy
+
+variables:
+  IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-$CI_PIPELINE_IID-$CI_COMMIT_SHORT_SHA
+  SECRET: ${{values.component_name}}
+  NAMESPACE: ${{values.namespace}}
+  REPLICAS: 1
+  ENVIRONMENT: dev
+  NEW_RELIC_APP_NAME: ${{values.component_name}}
+  INTERNAL_BALANCER: "true"
+  TENPO_SERVICE_PATH: ./deploy/tenposervice-values.yaml
+  TENPOSERVICE_VERSION: $UAT_${{values.k8s_cluster}}_TENPOSERVICE_VERSION
+  NAME: ${{values.component_name}}
+
+build:
+  coverage: '/([0-9]{1,3}.[0-9]*).%.covered/'
+  stage: build
+  image: openjdk:17-jdk-slim
+  variables:
+    GRADLE_USER_HOME: ~/.gradle
+  script:
+    - ./gradlew build
+    - awk -F, '{ instructions += $4 + $5; covered += $5 } END { print covered, "/", instructions, " instructions covered"; print 100*covered/instructions, "% covered" }' build/reports/jacoco/test/jacocoTestReport.csv
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .gradle
+      - build
+
+coverage:
+  stage: visualize
+  image: registry.gitlab.com/haynes/jacoco2cobertura:1.0.7
+  script:
+    - 'python /opt/cover2cover.py build/reports/jacoco/test/jacocoTestReport.xml src/main/java > build/cobertura.xml'
+    - 'python /opt/source2filename.py build/cobertura.xml'
+  needs: [ "build" ]
+  dependencies:
+    - build
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - build
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: build/cobertura.xml
+
+checkCoverage:
+  image: alpine:latest
+  stage: coverageVerifier
+  variables:
+    JOB_NAME: build
+    TARGET_BRANCH: uat
+  before_script:
+    - apk add --update --no-cache curl jq
+  needs: [ "build" ]
+  dependencies:
+    - build
+  script:
+    - 'TARGET_PIPELINE_ID="$(curl -s "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines?ref=${TARGET_BRANCH}&status=success&private_token=${PRIVATE_TOKEN}" | jq ".[0].id")"'
+    - 'TARGET_COVERAGE="$(curl -s "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines/${TARGET_PIPELINE_ID}/jobs?private_token=${PRIVATE_TOKEN}" | jq --arg build "build" ".[] | select(.name==\"build\") | .coverage")"'
+    - 'CURRENT_COVERAGE="$(curl -s "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/pipelines/${CI_PIPELINE_ID}/jobs?private_token=${PRIVATE_TOKEN}" | jq  ".[] | select(.name==\"build\") | .coverage")"'
+    - if [[ $CI_COMMIT_BRANCH == "hotfix/"* ]]; then IS_HOTFIX=0; else IS_HOTFIX=1; fi
+    - PERCENTAGE_DECREMENTED=$(echo "scale=4; (($TARGET_COVERAGE - $CURRENT_COVERAGE) /100) * 100" | bc)
+    - COVERAGE_THRESHOLD=3
+    - if [[ "$(echo "$PERCENTAGE_DECREMENTED > $COVERAGE_THRESHOLD" | bc)" -eq 1 &&  $IS_HOTFIX -eq 1 ]]; then echo "Coverage decreased from ${TARGET_COVERAGE} to ${CURRENT_COVERAGE}" && exit 1 ; fi
+  except:
+    - master
+    - tags
+
+dev_docker:
+  stage: docker
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [ "" ]
+  variables:
+    NEWRELIC_KEY: $NEWRELIC_DEV
+    IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  script:
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/deploy/Dockerfile --destination $IMAGE --build-arg=NEWRELIC_LICENSE_KEY=$NEWRELIC_KEY
+  only:
+    - dev
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - build
+
+dev_deployment:
+  stage: deploy
+  image: $PIPELINE_DEV_DEPLOY_${{values.k8s_cluster}}_IMAGE
+  environment:
+    name: dev
+  variables:
+    TENPO_SERVICE_HOST: ${DEV_APITENPO} # Delete if you in C Cluster
+  script:
+    - >
+      kubectl create secret docker-registry $SECRET \
+        --namespace=$NAMESPACE \
+        --dry-run=true \
+        --docker-server=$CI_REGISTRY \
+        --docker-username=$CI_DEPLOY_USER \
+        --docker-password=$CI_DEPLOY_PASSWORD \
+        --docker-email=$GITLAB_USER_EMAIL -o yaml | kubectl apply -f -
+    - sed -i "s|_REPLICAS_|$REPLICAS|g" ./deploy/.kube.yml
+    - sed -i "s|_IMAGE_|$IMAGE|g" ./deploy/.kube.yml
+    - sed -i "s|_ENVIRONMENT_|$ENVIRONMENT|g" ./deploy/.kube.yml
+    - sed -i "s|_NEW_RELIC_APP_NAME_|$NEW_RELIC_APP_NAME|g" ./deploy/.kube.yml
+    - sed -i "s|_INTERNAL_BALANCER_|$INTERNAL_BALANCER|g" ./deploy/.kube.yml
+    - sed -i "s|_TENPO_SERVICE_HOST_|$TENPO_SERVICE_HOST|g" ./deploy/tenposervice-values.yaml
+    - sed -i "s|_SECRET_|$SECRET|g" ./deploy/.kube.yml
+    - kubectl apply -f ./deploy/.kube.yml
+    #- helm repo update && helm upgrade --install --version $TENPOSERVICE_VERSION --namespace $NAMESPACE $NAME tenpo/tenposervice --values ./deploy/tenposervice-values.yaml # Delete if you in C Cluster
+  only:
+    - dev
+
+uat_docker:
+  extends: dev_docker
+  variables:
+    NEWRELIC_KEY: $NEWRELIC_UAT
+    IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  only:
+    - uat
+
+uat_deployment:
+  extends: dev_deployment
+  image: $PIPELINE_UAT_DEPLOY_${{values.k8s_cluster}}_IMAGE
+  environment:
+    name: uat
+  variables:
+    ENVIRONMENT: uat
+    IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    TENPO_SERVICE_HOST: ${UAT_APITENPO}
+  only:
+    - uat
+
+prod_docker:
+  extends: dev_docker
+  variables:
+    NEWRELIC_KEY: $NEWRELIC_PROD
+    IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+  only:
+    - tags
+
+prod_deployment:
+  extends: dev_deployment
+  image: $PIPELINE_PROD_DEPLOY_${{values.k8s_cluster}}_IMAGE
+  environment:
+    name: prod
+  variables:
+    ENVIRONMENT: prod
+    TENPO_SERVICE_HOST: ${PROD_APITENPO}
+    TENPOSERVICE_VERSION: $PROD_${{values.k8s_cluster}}_TENPOSERVICE_VERSION
+    IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+    REPLICAS: 2
+  only:
+    - tags

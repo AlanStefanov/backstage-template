@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{values.component_name}}
+  description: ${{values.description}}
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+spec:
+  type: migration
+  lifecycle: production
+  owner:  ${{values.group_owner}}
+  system: ${{values.flow_name}}

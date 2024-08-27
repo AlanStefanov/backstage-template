@@ -1,0 +1,9 @@
+version: '3.1'
+services:
+  wiremock-service:
+    image: wiremock/wiremock:latest
+    container_name: wiremock-${{values.component_name}}
+    volumes:
+      - ./wiremock:/home/wiremock
+    ports:
+      - "8383:8080"

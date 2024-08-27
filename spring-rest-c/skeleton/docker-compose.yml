@@ -1,0 +1,18 @@
+version: '3.1'
+services:
+  db:
+    image: postgres:latest
+    container_name: ${{values.component_name}}_postgres-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=database
+  wiremock-service:
+    image: wiremock/wiremock:latest
+    container_name: ${{values.component_name}}_wiremock
+    volumes:
+      - ./wiremock:/home/wiremock
+    ports:
+      - "8383:8080"

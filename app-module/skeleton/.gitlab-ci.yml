@@ -1,0 +1,70 @@
+stages:
+  - test
+  - publish
+
+variables:
+  NEXUS_AUTH: $NEXUS_AUTH
+
+cache: &global_cache
+  key:
+    files:
+      - yarn.lock
+  paths:
+    - .yarn-cache/
+  policy: pull-push
+
+install-dependencies:
+  image: node:gallium-bullseye-slim
+  stage: .pre
+  script:
+    - echo "_auth=${NEXUS_AUTH}" >> ~/.npmrc
+    - |
+      if ! [ -d .yarn-cache ]; then \
+      echo 'No yarn cache, creating'; \
+      echo 'yarn-offline-mirror ".yarn-cache/"' >> .yarnrc; \
+      echo 'yarn-offline-mirror-pruning true' >> .yarnrc; \
+      yarn install --frozen-lockfile --no-progress; \
+      else \
+      echo 'Yarn cache existing'; \
+      echo .yarnrc; \
+      fi
+
+test-eslint:
+  image: node:gallium-bullseye-slim
+  stage: test
+  tags:
+    - tenpo
+  script:
+    - echo "_auth=${NEXUS_AUTH}" >> ~/.npmrc
+    - yarn install --cache-folder .yarn-cache
+    - yarn lint
+  cache:
+    <<: *global_cache
+    policy: pull
+
+test-jest:
+  image: node:gallium-bullseye-slim
+  stage: test
+  tags:
+    - tenpo
+  script:
+    - echo "_auth=${NEXUS_AUTH}" >> ~/.npmrc
+    - yarn install --cache-folder .yarn-cache
+    - yarn test
+  cache:
+    <<: *global_cache
+    policy: pull
+
+build-lib:
+  image: node:gallium-bullseye-slim
+  stage: publish
+  script:
+    - echo "_auth=${NEXUS_AUTH}" >> ~/.npmrc
+    - yarn install --cache-folder .yarn-cache
+    - yarn lib:build
+    - yarn lib:publish
+  cache:
+    <<: *global_cache
+    policy: pull
+  only:
+    - main

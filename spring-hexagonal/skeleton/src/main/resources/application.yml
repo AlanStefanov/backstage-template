@@ -1,0 +1,84 @@
+main:
+  path: /${{values.component_name}}
+
+server:
+  port: 80
+
+management:
+  tracing:
+    propagation:
+      type: w3c,b3
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+
+spring:
+  application:
+    name: ${{values.component_name}}
+  main:
+    banner-mode: 'off'
+  profiles:
+    active: local
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+  datasource:
+    driverClassName: org.postgresql.Driver
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 5
+      connection-timeout: 20000
+      idle-timeout: 90000
+      max-lifetime: 600000
+      keepalive-time: 300000
+      poolName: engine_pool_${{values.component_name}}
+    password: ${DB_PASS}
+    url: jdbc:postgresql://${DATABASE_HOST}:5432/${DB_NAME}?connectTimeout=30&socketTimeout=30
+    username: ${DB_USER}
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQL9Dialect
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        current_session_context_class: org.springframework.orm.hibernate5.SpringSessionContext
+        default_schema: template_schema
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          lob:
+            non_contextual_creation: true
+  kafka:
+    enabled: true
+    bootstrap-servers: ${KAFKA_HOST}
+    listener:
+      observation-enabled: true
+      missing-topics-fatal: false
+    partitions-quantity: 4 #TODO: change necessary
+    replication-factor: 3 #TODO: change necessary
+    properties:
+      metadata.max.age.ms: 180000
+      connections.max.idle.ms: 120000
+      request.timeout.ms: 60000
+      delivery.timeout.ms: 180000
+      sasl:
+        mechanism: PLAIN
+        jaas:
+          config: org.apache.kafka.common.security.plain.PlainLoginModule required username="${KAFKA_API_CLIENT}" password="${KAFKA_API_SECRET}";
+      security:
+        protocol: ${KAFKA_SECURITY_PROTOCOL}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: ${{values.namespace}}
+      auto-start: true
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+    template:
+      observation-enabled: true

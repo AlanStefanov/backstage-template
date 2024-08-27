@@ -1,0 +1,65 @@
+kafka:
+    enabled: true
+spring:
+    datasource:
+        driverClassName: org.postgresql.Driver
+        hikari:
+            minimum-idle: 2
+            maximum-pool-size: 5
+            connection-timeout: 60000
+            idle-timeout: 60000
+            max-lifetime: 90000
+            keepalive-time: 300000
+            auto-commit: true
+            poolName: engine_pool_${{values.component_name}}
+        password: ${DB_PASS}
+        url: jdbc:postgresql://${DATABASE_HOST}:5432/templates?connectTimeout=30&socketTimeout=30
+        username: template_user@${DB_USER_HOST}
+    jackson:
+        property-naming-strategy: SNAKE_CASE
+    jpa:
+        hibernate:
+            ddl-auto: none
+        properties:
+            hibernate:
+                default_schema: template_schema
+                dialect: org.hibernate.dialect.PostgreSQLDialect
+                jdbc:
+                    lob:
+                        non_contextual_creation: true
+#    kafka:
+#        bootstrap-servers: ${KAFKA_HOST}
+#        consumer:
+#            auto-start: true
+#            group-id: spring-boot-java-template
+#            key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+#            value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+#        partitions-quantity: 3
+#        producer:
+#            properties:
+#                connections:
+#                    max:
+#                        idle:
+#                            ms: 120000
+#                delivery:
+#                    timeout:
+#                        ms: 180000
+#                metadata:
+#                    max:
+#                        age:
+#                            ms: 180000
+#                request:
+#                    timeout:
+#                        ms: 60000
+#        properties:
+#            sasl:
+#                jaas:
+#                    config: org.apache.kafka.common.security.plain.PlainLoginModule required username="${KAFKA_API_CLIENT}" password="${KAFKA_API_SECRET}";
+#                mechanism: PLAIN
+#            security:
+#                protocol: ${KAFKA_SECURITY_PROTOCOL}
+#        replication_factor: 3
+    main:
+        banner-mode: 'off'
+    profiles:
+        active: local

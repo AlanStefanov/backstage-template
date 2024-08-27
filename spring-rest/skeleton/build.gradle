@@ -1,0 +1,149 @@
+plugins {
+    id 'org.springframework.boot' version '2.6.7'
+    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+    id 'java'
+    id 'jacoco'
+}
+
+group = 'cl.tenpo'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '17'
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+jar {
+    enabled = true
+    archiveFileName = "app.jar"
+    archiveClassifier = ""
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    //Spring cloud
+    springCloudVersion = "2021.0.0"
+
+    //Test
+    junitJupiterVersion = "5.7.2"
+    mockito = "3.12.4"
+    hamcrest = "1.3"
+    hamcrestOptional = "2.0.0"
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-actuator-autoconfigure:2.7.11'
+    implementation'org.springframework:spring-core:5.3.27'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.cloud:spring-cloud-starter-sleuth'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'com.google.guava:guava:31.0.1-jre'
+    implementation 'org.apache.commons:commons-collections4:4.4'
+    implementation 'com.newrelic.logging:logback:2.0'
+    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'com.newrelic.agent.java:newrelic-api:7.4.1'
+    compileOnly 'org.projectlombok:lombok'
+    runtimeOnly 'org.postgresql:postgresql'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    //Tests
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation "com.h2database:h2"
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:$rootProject.ext.junitJupiterVersion")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:$rootProject.ext.junitJupiterVersion")
+    testImplementation("org.mockito:mockito-core:$rootProject.ext.mockito")
+    testImplementation("org.mockito:mockito-junit-jupiter:$rootProject.ext.mockito")
+    testImplementation("org.hamcrest:hamcrest-all:$rootProject.ext.hamcrest")
+    testImplementation("com.github.npathai:hamcrest-optional:$rootProject.ext.hamcrestOptional")
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+}
+
+def exclusions = [
+        //TODO: delete wildcard in the project.
+        '**/*',
+        //TODO: Uncomment lines
+        //'**/common/**',
+        //'**/config/**',
+        //'**/util/**',
+        //'**/exception/**'
+        ]
+
+build {
+    doLast {
+        exec {
+            executable "./pre-commit-setup.sh"
+        }
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+test {
+    useJUnitPlatform()
+    jacoco {
+        enabled = true
+        excludes += exclusions
+    }
+    finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn jacocoTestCoverageVerification
+    reports {
+        xml.enabled true
+        csv.enabled true
+        html.enabled true
+    }
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: exclusions)
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.80
+            }
+            afterEvaluate {
+                getClassDirectories().setFrom(classDirectories.files.collect {
+                    fileTree(dir: it, exclude: exclusions)
+                })
+            }
+        }
+
+        rule {
+            enabled = false
+            element = 'CLASS'
+            includes = ['cl.tenpo.${{values.java_package_name}}.*']
+            excludes = exclusions
+
+            limit {
+                counter = 'LINE'
+                value = 'TOTALCOUNT'
+                maximum = 0.3
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification

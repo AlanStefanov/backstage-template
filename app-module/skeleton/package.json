@@ -1,0 +1,44 @@
+{
+  "name": "@tenpo/${{ parameters.moduleNameNexus }}",
+  "version": "0.0.15",
+  "description": "Tenpo module ${{ parameters.moduleName }}",
+  "repository": "${{ parameters.repoUrl }}",
+  "author": "Tenpo",
+  "license": "SEE LICENSE IN LICENSE",
+  "main": "index.ts",
+  "types": "index.d.ts",
+  "devDependencies": {
+    "@tenpo/lib-core": "^0.0.38",
+    "@tenpo/lib-ui": "^0.0.21",
+    "@types/jest": "^29.2.0",
+    "@types/react": "^18.0.22",
+    "@types/react-native": "^0.69.3",
+    "@typescript-eslint/eslint-plugin": "^5.41.0",
+    "@typescript-eslint/parser": "^5.41.0",
+    "enzyme": "^3.11.0",
+    "enzyme-adapter-react-16": "^1.15.6",
+    "eslint": "^8.26.0",
+    "jest": "^29.2.2",
+    "react": "18.2.0",
+    "react-dom": "^18.2.0",
+    "react-native": "0.69.6",
+    "run-script-os": "^1.1.6",
+    "ts-node": "^10.9.1",
+    "typescript": "^4.8.4"
+  },
+  "scripts": {
+    "lib:build": "run-script-os",
+    "lib:build:darwin": "rm -rf dist && tsc && cp package.json dist/ && cp -r src/res dist/src/ && sed -i '' 's/\"index.ts\"/\"index.js\"/g' dist/package.json",
+    "lib:build:linux": "rm -rf dist && tsc && cp package.json dist/ && cp -r src/res dist/src/ && sed -i 's/\"index.ts\"/\"index.js\"/g' dist/package.json",
+    "lib:publish": "cd dist && yarn publish",
+    "clean": "rm -rf node_modules yarn.lock && yarn",
+    "test": "jest",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx"
+  },
+  "publishConfig": {
+    "registry": "https://nexus-tools.tenpodigital.cloud/repository/npm-private/"
+  },
+  "dependencies": {
+    "@tenpo/lib-extensible-duck": "^0.0.2"
+  }
+}

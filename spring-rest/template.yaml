@@ -1,0 +1,114 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: springboot-template
+  title: Spring Boot Service
+  description: Create a simple microservice using Spring Boot Java
+  tags:
+    - recommended
+    - java
+    - rest
+spec:
+  owner: esteban.orellana@tenpo.cl
+  type: service
+  parameters:
+    - title: Provide some simple information
+      required:
+        - component_name
+        - java_package_name
+        - k8s_cluster
+        - namespace
+        - group_owner
+        - flow_name
+        - description
+      properties:
+        component_name:
+          title: Name
+          type: string
+          description: Unique name of the component
+          ui:field: EntityNamePicker
+        java_package_name:
+          title: Java Package Name
+          type: string
+          description: Name for the java package. eg (cl.tenpo.payment.xxx)
+        k8s_cluster:
+          title: Cluster
+          type: string
+          enum: 
+            - 'B'
+            - 'CREDITO'
+            - 'SEGUROS'
+          enumNames:
+            - 'Cluster Capa B'
+            - 'Cluster Seguros'
+            - 'Cluster Credito'
+          description: Name for the java package. eg (cl.tenpo.payment.xxx)
+        namespace:
+          title: Namespace
+          type: string
+          description: Namespace for deploy on K8S.
+        group_owner:
+          title: Name of squad owner
+          type: string
+          description: Name of squad
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds:
+              - Group
+        flow_name:
+          title: Flow name
+          type: string
+          description: Flow name eg (prepaid, cca, credit-card ...)
+        description:
+          title: Description
+          type: string
+          description: Help others understand what this service is for.
+    - title: Choose a location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - gitlab.com
+
+  steps:
+    - id: template
+      name: Fetch Skeleton + Template
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          component_name: ${{ parameters.component_name }}
+          description: ${{ parameters.description }}
+          java_package_name: ${{ parameters.java_package_name }}
+          group_owner: ${{ parameters.group_owner }}
+          flow_name: ${{ parameters.flow_name }}
+          namespace: ${{ parameters.namespace }}
+          destination: ${{ parameters.repoUrl | parseRepoUrl }}
+          k8s_cluster: ${{ parameters.k8s_cluster }}
+
+    - id: publish
+      name: Publish
+      action: publish:gitlab
+      input:
+        allowedHosts: ["gitlab.com"]
+        description: This is ${{ parameters.component_name }}
+        repoUrl: ${{ parameters.repoUrl }}
+        defaultBranch: uat
+    - id: register
+      name: Register
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: "/catalog-info.yaml"
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}

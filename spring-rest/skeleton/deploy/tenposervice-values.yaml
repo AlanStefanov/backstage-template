@@ -1,0 +1,14 @@
+selector:
+  app: ${{values.component_name}}
+networking:
+  host: '_TENPO_SERVICE_HOST_'
+  port: 80
+  protocol: TCP
+  endpoints:
+    - name: template
+      path: /template/v1/template
+      profile: public
+      methods:
+        - GET
+teamInfo:
+  name: "Template"

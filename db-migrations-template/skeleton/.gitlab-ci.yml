@@ -1,0 +1,84 @@
+stages:
+  - registry
+  - apply
+
+registry:
+  stage: registry
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [ "" ]
+  script:
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/deploy/Dockerfile --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
+  only:
+    - master
+  cache:
+    key: "$CI_COMMIT_SHORT_SHA"
+    paths:
+      - .env
+
+apply:
+  stage: apply
+  image: $PIPELINE_PROD_DEPLOY_${{values.k8s_cluster}}_IMAGE
+  environment:
+    name: prod
+  variables:
+    ENVIRONMENT: prod
+    REGISTRY: ${{values.component_name}}-registry
+    NAMESPACE: ${{values.namespace}}
+    IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
+    COMMIT_SHA: $CI_COMMIT_SHORT_SHA
+    DEPLOY_ENV_PATH: ./deploy/.kube.yml
+  script:
+    - sed -i "s|_IMAGE_|$IMAGE|g" $DEPLOY_ENV_PATH
+    - sed -i "s|_ENVIRONMENT_|$ENVIRONMENT|g" $DEPLOY_ENV_PATH
+    - sed -i "s|_COMMIT_SHA_|$COMMIT_SHA|g" $DEPLOY_ENV_PATH
+    - sed -i "s|_JOB_ID_|$CI_PIPELINE_IID|g" $DEPLOY_ENV_PATH
+    - kubectl apply -f $DEPLOY_ENV_PATH
+    - >
+      kubectl create secret docker-registry $REGISTRY \
+        --namespace=$NAMESPACE \
+        --dry-run=true \
+        --docker-server=$CI_REGISTRY \
+        --docker-username=$CI_DEPLOY_USER \
+        --docker-password=$CI_DEPLOY_PASSWORD \
+        --docker-email=$GITLAB_USER_EMAIL -o yaml | kubectl apply -f -
+  only:
+    - master
+
+dev_registry:
+  extends: registry
+  script:
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/deploy/Dockerfile --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
+  only:
+    - dev
+
+dev_apply:
+  extends: apply
+  image: $PIPELINE_UAT_DEPLOY_${{values.k8s_cluster}}_IMAGE
+  environment:
+    name: dev
+  variables:
+    ENVIRONMENT: dev
+  only:
+    - dev
+
+uat_registry:
+  extends: registry
+  script:
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/deploy/Dockerfile --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
+  only:
+    - uat
+
+uat_apply:
+  extends: apply
+  image: $PIPELINE_UAT_DEPLOY_${{values.k8s_cluster}}_IMAGE
+  environment:
+    name: uat
+  variables:
+    ENVIRONMENT: uat
+    IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
+  only:
+    - uat

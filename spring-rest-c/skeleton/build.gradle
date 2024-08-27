@@ -1,0 +1,123 @@
+plugins {
+    id 'java'
+    id 'jacoco'
+    id 'org.springframework.boot' version '3.2.5'
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+group = 'cl.tenpo'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    sourceCompatibility = '21'
+}
+
+jacoco {
+    toolVersion = "0.8.11"
+    reportsDirectory.set(layout.buildDirectory.dir("$buildDir/reports/jacoco"))
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'io.micrometer:micrometer-tracing-bridge-brave'
+    implementation "com.newrelic.logging:logback:$newreliclogback"
+    implementation "com.newrelic.agent.java:newrelic-api:$newrelicagent"
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:$openapi"
+    compileOnly 'org.projectlombok:lombok'
+    runtimeOnly 'org.postgresql:postgresql'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation "com.github.tomakehurst:wiremock-standalone:$wiremocktest"
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:kafka'
+    testImplementation 'org.testcontainers:postgresql'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springcloud}"
+    }
+}
+
+task checkstyle(type: Checkstyle) {
+    source 'src/main/java'
+    include '**/*.java'
+    exclude '**/build/', '**/generated/', '**/target/'
+    classpath = files()
+    configFile = file("${rootProject.projectDir}/config/checkstyle/checkstyle.xml")
+    ignoreFailures = true
+}
+
+build {
+    doLast {
+        exec {
+            executable "./pre-commit-setup.sh"
+        }
+    }
+}
+
+def exclusions = [
+        '**/config/**',
+        '**/Application*',
+]
+
+test {
+    useJUnitPlatform()
+    jacoco {
+        enabled = true
+        excludes += exclusions
+    }
+    finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    reports {
+        xml.required = true
+        csv.required = true
+        html.required = true
+    }
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: exclusions)
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0 //TODO: change to 0.6
+                counter = 'LINE'
+                excludes = exclusions
+            }
+            afterEvaluate {
+                getClassDirectories().setFrom(classDirectories.files.collect {
+                    fileTree(dir: it, exclude: exclusions)
+                })
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification

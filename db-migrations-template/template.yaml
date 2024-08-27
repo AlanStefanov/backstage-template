@@ -1,0 +1,110 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: database-migrations-template
+  title: Database Migration Project
+  description: Create a simple database migration project using dbmate
+  tags:
+    - recommended
+    - db
+    - rest
+spec:
+  owner: esteban.orellana@tenpo.cl
+  type: service
+
+  parameters:
+    - title: Provide some simple information
+      required:
+        - component_name
+        - k8s_cluster
+        - namespace
+        - group_owner
+        - flow_name
+        - database_name
+        - description
+      properties:
+        component_name:
+          title: Name
+          type: string
+          description: Unique name of the component
+          ui:field: EntityNamePicker
+        k8s_cluster:
+          title: Cluster
+          type: string
+          enum: [ 'b','c' ]
+          description: Name for the java package. eg (cl.tenpo.payment.xxx)
+        namespace:
+          title: Namespace
+          type: string
+          description: Namespace for deploy on K8S.
+        group_owner:
+          title: Name of squad owner
+          type: string
+          description: Name of squad
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds:
+              - Group
+        flow_name:
+          title: Flow name
+          type: string
+          description: Flow name eg (prepaid, cca, credit-card ...)
+        database_name:
+          title: Database Name
+          type: string
+          description: Database name created from DB creation pipeline
+        description:
+          title: Description
+          type: string
+          description: Help others understand what this service is for.
+    - title: Choose a location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - gitlab.com
+
+  steps:
+    - id: template
+      name: Fetch Skeleton + Template
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          component_name: ${{ parameters.component_name }}
+          description: ${{ parameters.description }}
+          group_owner: ${{ parameters.group_owner }}
+          flow_name: ${{ parameters.flow_name }}
+          namespace: ${{ parameters.namespace }}
+          destination: ${{ parameters.repoUrl | parseRepoUrl }}
+          k8s_cluster: ${{ parameters.k8s_cluster }}
+          database_name: ${{ parameters.database_name }}
+
+    - id: publish
+      name: Publish
+      action: publish:gitlab
+      input:
+        allowedHosts: [ "gitlab.com" ]
+        description: This is ${{ parameters.component_name }}
+        repoUrl: ${{ parameters.repoUrl }}
+        defaultBranch: uat
+
+    - id: register
+      name: Register
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: "/catalog-info.yaml"
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}
